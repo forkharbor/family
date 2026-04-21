@@ -50,6 +50,28 @@
     }
     .hbtn:active { background: rgba(255,255,255,0.42); }
 
+    /* ── Sync indicator ── */
+    .sync-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.5);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .sync-dot.ok      { background: #a5f3a5; }
+    .sync-dot.syncing { background: #ffe082; }
+    .sync-dot.error   { background: #ef9a9a; }
+
+    /* ── Loading overlay ── */
+    .loading {
+      position: fixed; inset: 0;
+      background: #f5f3ef;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      font-size: 0.95rem; color: #aaa;
+    }
+    .loading.hide { display: none; }
+
     /* ── Calendar ── */
     .cal { padding: 8px; }
 
@@ -261,11 +283,15 @@
 </head>
 <body>
 
+<!-- Loading overlay -->
+<div class="loading" id="loading">接続中…</div>
+
 <!-- Header -->
 <div class="header">
   <button class="hbtn" onclick="shiftMonth(-1)">‹</button>
   <div class="month-label" id="month-label" onclick="goToday()"></div>
   <button class="hbtn" onclick="shiftMonth(1)">›</button>
+  <div class="sync-dot" id="sync-dot" title="同期状態"></div>
   <button class="hbtn" onclick="openSettings()">⚙</button>
 </div>
 
@@ -307,24 +333,61 @@
   <button class="save-btn" onclick="saveSettings()">保存する</button>
 </div>
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
 <script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCfvqQWLB8NJqmaH0k2G0wPcbJJjz2Vu4A",
+    authDomain: "kaimemo-58bad.firebaseapp.com",
+    projectId: "kaimemo-58bad",
+    storageBucket: "kaimemo-58bad.firebasestorage.app",
+    messagingSenderId: "308069117698",
+    appId: "1:308069117698:web:c61a57853abb7e8ffb1c1b"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('family-schedule').doc('data');
+
   const COLORS = ['#ff8a65','#42a5f5','#66bb6a','#ab47bc','#ffa726','#26c6da'];
-  const QUICK  = ['夕食不要','夕食いる','外出','帰り遅い','在宅','泊まり','お弁当','風呂','洗濯','トイレ掃除'];
+  const QUICK  = ['夕食不要','外出','帰り遅い','在宅','泊まり','お弁当','風呂','洗濯','トイレ掃除','家庭ごみ'];
+  const DEFAULT_MEMBERS = [
+    {name:'宏',color:'#ff8a65'},
+    {name:'万',color:'#42a5f5'},
+    {name:'克',color:'#66bb6a'}
+  ];
 
-  let members = JSON.parse(localStorage.getItem('fm_members') || 'null')
-    || [{name:'宏',color:'#ff8a65'},{name:'万',color:'#42a5f5'},
-        {name:'克',color:'#66bb6a'}];
-
-  let entries  = JSON.parse(localStorage.getItem('fm_entries') || '{}');
+  let members   = [...DEFAULT_MEMBERS];
+  let entries   = {};
   let selMember = 0;
   let curDate   = null;
   let vy = new Date().getFullYear();
   let vm = new Date().getMonth();
 
-  // ── persist ──────────────────────────────────────────────────────────────────
+  function setSyncDot(state) {
+    const dot = document.getElementById('sync-dot');
+    dot.className = 'sync-dot ' + state;
+  }
+
+  // ── Firestore リアルタイム同期 ────────────────────────────────────
+  docRef.onSnapshot(snap => {
+    if (snap.exists) {
+      const data = snap.data();
+      entries = data.entries || {};
+      members = data.members || DEFAULT_MEMBERS;
+    }
+    document.getElementById('loading').classList.add('hide');
+    setSyncDot('ok');
+    renderCal();
+    if (curDate) renderEntryList();
+  }, () => setSyncDot('error'));
+
+  // ── 書き込み ──────────────────────────────────────────────────────
   function persist() {
-    localStorage.setItem('fm_entries', JSON.stringify(entries));
-    localStorage.setItem('fm_members', JSON.stringify(members));
+    setSyncDot('syncing');
+    docRef.set({ entries, members });
   }
 
   // ── calendar ──────────────────────────────────────────────────────────────────
@@ -469,8 +532,6 @@
     if (!entries[curDate]) entries[curDate] = [];
     entries[curDate].push({ who: m.name, color: m.color, text });
     persist();
-    renderCal();
-    renderEntryList();
     document.getElementById('txt').value = '';
     updateAddBtn();
   }
@@ -479,8 +540,6 @@
     entries[curDate].splice(i, 1);
     if (!entries[curDate].length) delete entries[curDate];
     persist();
-    renderCal();
-    renderEntryList();
   }
 
   // ── settings ──────────────────────────────────────────────────────────────────
@@ -520,12 +579,9 @@
 
   function pad(n) { return String(n).padStart(2,'0'); }
 
-  // ── Enter key ─────────────────────────────────────────────────────────────────
   document.getElementById('txt').addEventListener('keydown', e => {
     if (e.key === 'Enter') addEntry();
   });
-
-  renderCal();
 </script>
 </body>
 </html>
