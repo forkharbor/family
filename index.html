@@ -501,6 +501,14 @@
   function renderMemberRow() {
     const row = document.getElementById('member-row');
     row.innerHTML = '';
+    if (members[0]?.name && members[1]?.name) {
+      const pairBtn = document.createElement('button');
+      pairBtn.className = 'mbtn pair' + (Array.isArray(selMember) ? ' sel' : '');
+      pairBtn.style.background = `linear-gradient(90deg, ${members[0].color} 0 50%, ${members[1].color} 50% 100%)`;
+      pairBtn.textContent = `${members[0].name}・${members[1].name}`;
+      pairBtn.onclick = () => { selMember = [0, 1]; renderMemberRow(); };
+      row.appendChild(pairBtn);
+    }
     members.forEach((m, i) => {
       if (!m.name) return;
       const btn = document.createElement('button');
@@ -531,9 +539,16 @@
   function addEntry() {
     const text = document.getElementById('txt').value.trim();
     if (!text) return;
-    const m = members[selMember];
+    const selected = Array.isArray(selMember)
+      ? selMember.map(i => members[i]).filter(m => m?.name)
+      : [members[selMember]].filter(m => m?.name);
+    if (!selected.length) return;
+    const who = selected.map(m => m.name).join('・');
+    const color = selected.length === 1
+      ? selected[0].color
+      : `linear-gradient(90deg, ${selected[0].color} 0 50%, ${selected[1].color} 50% 100%)`;
     if (!entries[curDate]) entries[curDate] = [];
-    entries[curDate].push({ who: m.name, color: m.color, text });
+    entries[curDate].push({ who, color, text });
     persist();
     document.getElementById('txt').value = '';
     updateAddBtn();
