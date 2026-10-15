@@ -501,14 +501,20 @@
   function renderMemberRow() {
     const row = document.getElementById('member-row');
     row.innerHTML = '';
-    if (members[0]?.name && members[1]?.name) {
+    [[0, 1], [0, 2]].forEach(pair => {
+      if (!pair.every(i => members[i]?.name)) return;
+      const [first, second] = pair.map(i => members[i]);
+      const isSelected = Array.isArray(selMember)
+        && selMember.length === pair.length
+        && pair.every((memberIndex, i) => selMember[i] === memberIndex);
       const pairBtn = document.createElement('button');
-      pairBtn.className = 'mbtn pair' + (Array.isArray(selMember) ? ' sel' : '');
-      pairBtn.style.background = `linear-gradient(90deg, ${members[0].color} 0 50%, ${members[1].color} 50% 100%)`;
-      pairBtn.textContent = `${members[0].name}・${members[1].name}`;
-      pairBtn.onclick = () => { selMember = [0, 1]; renderMemberRow(); };
+      pairBtn.className = 'mbtn pair' + (isSelected ? ' sel' : '');
+      pairBtn.setAttribute('aria-pressed', String(isSelected));
+      pairBtn.style.background = `linear-gradient(90deg, ${first.color} 0 50%, ${second.color} 50% 100%)`;
+      pairBtn.textContent = `${first.name}・${second.name}`;
+      pairBtn.onclick = () => { selMember = [...pair]; renderMemberRow(); };
       row.appendChild(pairBtn);
-    }
+    });
     members.forEach((m, i) => {
       if (!m.name) return;
       const btn = document.createElement('button');
