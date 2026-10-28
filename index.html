@@ -108,6 +108,21 @@
     .day.past     { opacity: 0.55; }
     .day.sun .dn  { color: #e53935; }
     .day.sat .dn  { color: #1e88e5; }
+    .day.holiday { background: #fff0f3; }
+    .day.holiday .dn,
+    .holiday-name,
+    .sheet-title.holiday-title { color: #b93652; }
+    .holiday-name {
+      font-size: 0.62rem;
+      font-weight: 600;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      margin-bottom: 3px;
+    }
+    .day:focus-visible { outline: 2px solid var(--pri); outline-offset: -2px; }
+    .holiday-status { color: #936222; font-size: 0.75rem; margin-bottom: 8px; }
+    .holiday-source { color: #6e90a5; font-size: 0.65rem; line-height: 1.6; margin-top: 10px; }
+    .holiday-source a { color: #2385ba; }
     .day.today .dn {
       background: var(--pri);
       color: #fff !important;
@@ -291,9 +306,9 @@
 
 <!-- Header -->
 <div class="header">
-  <button class="hbtn" onclick="shiftMonth(-1)">‹</button>
+  <button class="hbtn" onclick="shiftMonth(-1)" aria-label="前の月">‹</button>
   <div class="month-label" id="month-label" onclick="goToday()"></div>
-  <button class="hbtn" onclick="shiftMonth(1)">›</button>
+  <button class="hbtn" onclick="shiftMonth(1)" aria-label="次の月">›</button>
   <div class="sync-dot" id="sync-dot" title="同期状態"></div>
   <button class="hbtn" onclick="openSettings()">⚙</button>
 </div>
@@ -304,7 +319,9 @@
     <span>日</span><span>月</span><span>火</span><span>水</span>
     <span>木</span><span>金</span><span>土</span>
   </div>
+  <p id="holiday-status" class="holiday-status" role="status" hidden></p>
   <div class="days" id="grid"></div>
+  <p class="holiday-source">祝日・休日は赤字で表示 · 出典：<a href="https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html" target="_blank" rel="noopener noreferrer">内閣府</a>（1955〜2027年）</p>
 </div>
 
 <!-- Backdrop -->
@@ -340,6 +357,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
+<script src="holidays.js?v=20261028"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyCfvqQWLB8NJqmaH0k2G0wPcbJJjz2Vu4A",
@@ -404,6 +422,9 @@
 
   function renderCal() {
     document.getElementById('month-label').textContent = `${vy}年 ${vm+1}月`;
+    const holidayStatus = document.getElementById('holiday-status');
+    holidayStatus.hidden = vy >= HOLIDAY_START_YEAR && vy <= HOLIDAY_END_YEAR;
+    holidayStatus.textContent = holidayStatus.hidden ? '' : `${vy}年の祝日データは未掲載です`;
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
     const today = new Date();
@@ -419,19 +440,38 @@
     for (let d = 1; d <= days; d++) {
       const dow = (first + d - 1) % 7;
       const ds  = `${vy}-${pad(vm+1)}-${pad(d)}`;
+      const holidayName = JAPAN_HOLIDAYS[ds] || '';
       const isToday = today.getFullYear()===vy && today.getMonth()===vm && today.getDate()===d;
       const isPast  = new Date(vy,vm,d) < new Date(today.getFullYear(),today.getMonth(),today.getDate());
 
       const cell = document.createElement('div');
       cell.className = 'day'
         + (dow===0?' sun':'') + (dow===6?' sat':'')
-        + (isToday?' today':'') + (isPast&&!isToday?' past':'');
+        + (isToday?' today':'') + (isPast&&!isToday?' past':'')
+        + (holidayName?' holiday':'');
+      cell.setAttribute('role', 'button');
+      cell.tabIndex = 0;
+      cell.setAttribute('aria-label', `${vy}年${vm+1}月${d}日${holidayName ? ` ${holidayName}` : ''} 予定${(entries[ds] || []).length}件`);
       cell.onclick = () => openSheet(ds);
+      cell.onkeydown = event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openSheet(ds);
+        }
+      };
 
       const dn = document.createElement('div');
       dn.className = 'dn';
       dn.textContent = d;
       cell.appendChild(dn);
+
+      if (holidayName) {
+        const holiday = document.createElement('div');
+        holiday.className = 'holiday-name';
+        holiday.textContent = holidayName;
+        cell.title = holidayName;
+        cell.appendChild(holiday);
+      }
 
       const es = entries[ds] || [];
       if (es.length) {
@@ -462,7 +502,10 @@
     curDate = ds;
     const [y,m,d] = ds.split('-').map(Number);
     const dow = ['日','月','火','水','木','金','土'][new Date(y,m-1,d).getDay()];
-    document.getElementById('sheet-title').textContent = `${m}月${d}日（${dow}）`;
+    const holidayName = JAPAN_HOLIDAYS[ds] || '';
+    const sheetTitle = document.getElementById('sheet-title');
+    sheetTitle.textContent = `${m}月${d}日（${dow}）${holidayName ? ` ｜ ${holidayName}` : ''}`;
+    sheetTitle.classList.toggle('holiday-title', Boolean(holidayName));
     document.getElementById('txt').value = '';
     updateAddBtn();
     renderEntryList();
@@ -609,3 +652,4 @@
 </script>
 </body>
 </html>
+
